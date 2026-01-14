@@ -29,7 +29,7 @@ struct Arguments
 };
 
 constexpr const char* HELP_TEXT = R"(
-GS2 Script Compiler/Decompiler
+GS2 Script Compiler/Disassembler
 
 Usage:
   %s [OPTIONS] INPUT [OUTPUT]
@@ -38,19 +38,19 @@ Usage:
 
 Arguments:
   INPUT              Input file (.gs2, .txt, or .gs2bc) or directory
-  OUTPUT             Output file (.gs2bc for compile, .gs2 for decompile)
+  OUTPUT             Output file (.gs2bc for compile, .gs2 for disassemble)
 
 Options:
   -o, --output FILE  Specify output file
-  -d, --decompile    Decompile .gs2bc to .gs2 source
+  -d, --disassemble  Disassemble .gs2bc to .gs2 format
   -v, --verbose      Verbose output
   -h, --help         Show this help message
 
 Examples:
   %s script.gs2                    # Creates script.gs2bc (compile)
-  %s script.gs2bc -d               # Creates script.gs2 (decompile)
+  %s script.gs2bc -d               # Creates script.gs2 (disassemble)
   %s script.gs2 output.gs2bc       # Creates output.gs2bc
-  %s script.gs2bc -o output.gs2 -d # Creates output.gs2 (decompile)
+  %s script.gs2bc -o output.gs2 -d # Creates output.gs2 (disassemble)
   %s scripts/                      # Process directory
   %s file1.gs2 file2.gs2 file3.gs2 # Process multiple files (drag & drop)
 )";
@@ -103,7 +103,7 @@ Arguments parseArguments(int argc, const char* argv[])
 		{
 			args.verbose = true;
 		}
-		else if (arg == "--decompile" || arg == "-d")
+		else if (arg == "--disassemble" || arg == "--decompile" || arg == "-d")
 		{
 			args.decompile_mode = true;
 		}
@@ -258,7 +258,7 @@ bool decompileAndReport(const std::filesystem::path& inputPath, const std::files
 	}
 
 	if (verbose)
-		printf("Decompiling file %s\n", inputPath.c_str());
+		printf("Disassembling file %s\n", inputPath.c_str());
 
 	auto start = std::chrono::high_resolution_clock::now();
 	auto result = decompileFile(inputPath, outputPath);
@@ -267,7 +267,7 @@ bool decompileAndReport(const std::filesystem::path& inputPath, const std::files
 	if (verbose)
 	{
 		std::chrono::duration<double> diff = finish - start;
-		printf("Decompiled in %f seconds\n", diff.count());
+		printf("Disassembled in %f seconds\n", diff.count());
 	}
 
 	if (!result.errmsg.empty())
@@ -345,7 +345,7 @@ void processFileList(const std::vector<std::filesystem::path>& files, bool verbo
 					file_path.parent_path() / (file_path.stem().string() + ".gs2bc"))
 				: output;
 			printf("%s successful\n -> saved to %s\n",
-				decompile_mode ? "Decompilation" : "Compilation",
+				decompile_mode ? "Disassembly" : "Compilation",
 				final_output.c_str());
 		}
 

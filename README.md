@@ -1,11 +1,11 @@
 # gs2-parser
 
-A **compiler and decompiler** for the Graal Script 2 (GS2) language used in GraalOnline games.
+A **compiler and disassembler** for the Graal Script 2 (GS2) language used in GraalOnline games.
 
 ## Features
 
 - **GS2 Compiler**: Convert GS2 source code (`.gs2`, `.txt`) to bytecode (`.gs2bc`)
-- **GS2 Decompiler**: Decompile bytecode files back to human-readable disassembly
+- **GS2 Disassembler**: Disassemble bytecode files to human-readable format
 - **Full AST-based compilation**: Proper parsing and semantic analysis
 - **Multi-file support**: Process multiple files or directories at once
 - **WASM support**: Compile to WebAssembly for browser usage
@@ -87,11 +87,11 @@ The resulting `gs2test.js` and `gs2test.wasm` files can be imported into a webpa
 ./bin/gs2test script.gs2 -v
 ```
 
-### Decompiler
+### Disassembler
 
-The decompiler converts `.gs2bc` bytecode files back to human-readable format.
+The disassembler converts `.gs2bc` bytecode files to human-readable disassembly.
 
-**Basic decompilation:**
+**Basic disassembly:**
 ```sh
 ./bin/gs2test script.gs2bc -d
 # Creates: script.gs2
@@ -99,10 +99,10 @@ The decompiler converts `.gs2bc` bytecode files back to human-readable format.
 
 **With custom output:**
 ```sh
-./bin/gs2test script.gs2bc -d -o decompiled.gs2
+./bin/gs2test script.gs2bc -d -o disassembled.gs2
 ```
 
-**Verbose decompilation:**
+**Verbose disassembly:**
 ```sh
 ./bin/gs2test script.gs2bc -d -v
 ```
@@ -110,7 +110,7 @@ The decompiler converts `.gs2bc` bytecode files back to human-readable format.
 ### Command-Line Options
 
 ```
-GS2 Script Compiler/Decompiler
+GS2 Script Compiler/Disassembler
 
 Usage:
   gs2test [OPTIONS] INPUT [OUTPUT]
@@ -119,19 +119,19 @@ Usage:
 
 Arguments:
   INPUT              Input file (.gs2, .txt, or .gs2bc) or directory
-  OUTPUT             Output file (.gs2bc for compile, .gs2 for decompile)
+  OUTPUT             Output file (.gs2bc for compile, .gs2 for disassemble)
 
 Options:
   -o, --output FILE  Specify output file
-  -d, --decompile    Decompile .gs2bc to .gs2 source
+  -d, --disassemble  Disassemble .gs2bc to .gs2 format
   -v, --verbose      Verbose output
   -h, --help         Show this help message
 
 Examples:
   gs2test script.gs2                    # Creates script.gs2bc (compile)
-  gs2test script.gs2bc -d               # Creates script.gs2 (decompile)
+  gs2test script.gs2bc -d               # Creates script.gs2 (disassemble)
   gs2test script.gs2 output.gs2bc       # Creates output.gs2bc
-  gs2test script.gs2bc -o output.gs2 -d # Creates output.gs2 (decompile)
+  gs2test script.gs2bc -o output.gs2 -d # Creates output.gs2 (disassemble)
   gs2test scripts/                      # Process directory
   gs2test file1.gs2 file2.gs2 file3.gs2 # Process multiple files
 ```
@@ -148,9 +148,9 @@ Examples:
 ./bin/gs2test file1.gs2 file2.gs2 file3.gs2
 ```
 
-## Decompiler Output
+## Disassembler Output
 
-The decompiler generates a disassembly showing:
+The disassembler generates a human-readable disassembly showing:
 
 - Function structure and names
 - String constants from the string table
@@ -160,7 +160,6 @@ The decompiler generates a disassembly showing:
 **Example output:**
 ```gs2
 function onCreated() {
-  // Decompilation not fully implemented yet
   // Function: onCreated
   // Opcodes: 52 bytes
   // OP_SET_INDEX
@@ -234,6 +233,13 @@ The compiler uses a multi-stage pipeline:
 4. **Code Generation**: Visitor pattern emits bytecode
 5. **Optimization**: Jump label resolution and optimization
 
+The disassembler performs bytecode analysis:
+
+1. **Segment Parsing**: Reads bytecode segments (flags, functions, strings, bytecode)
+2. **Instruction Decoding**: Parses opcodes and operands
+3. **Symbol Resolution**: Extracts string table and function names
+4. **Disassembly Generation**: Produces human-readable output
+
 ### Key Components
 
 - **`src/parser.y`**: Bison grammar for GS2 language
@@ -276,5 +282,5 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ## Acknowledgments
 
 - Original compiler by **xtjoeytx**
-- Decompiler implementation by **vinvicta**
+- Disassembler implementation by **vinvicta**
 - Based on the GraalOnline GS2 language specification
