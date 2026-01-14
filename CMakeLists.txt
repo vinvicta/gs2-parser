@@ -57,6 +57,7 @@ set(SOURCES_ALL
 	src/ast/ast.cpp
 	src/encoding/buffer.cpp
 	src/visitors/GS2CompilerVisitor.cpp
+	src/visitors/GS2Decompiler.cpp
 	src/GS2BuiltInFunctions.cpp
 	src/GS2Bytecode.cpp
 	src/GS2Context.cpp
@@ -75,6 +76,7 @@ set(SOURCES_ALL
 	src/visitors/FunctionInspectVisitor.h
 	src/visitors/GS2CompilerVisitor.h
 	src/visitors/GS2SourceVisitor.h
+	src/visitors/GS2Decompiler.h
 	src/CompilerThreadJob.h
 	src/GS2BuiltInFunctions.h
 	src/GS2Bytecode.h

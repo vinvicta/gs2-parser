@@ -7,6 +7,7 @@
 #include <vector>
 #include <span>
 #include "GS2Context.h"
+#include "visitors/GS2Decompiler.h"
 
 struct Response
 {
@@ -23,11 +24,12 @@ struct Arguments
 	bool verbose = false;
 	bool directory_mode = false;
 	bool multi_file_mode = false;
+	bool decompile_mode = false;
 	std::string error;
 };
 
 constexpr const char* HELP_TEXT = R"(
-GS2 Script Compiler
+GS2 Script Compiler/Decompiler
 
 Usage:
   %s [OPTIONS] INPUT [OUTPUT]
@@ -35,18 +37,20 @@ Usage:
   %s --help
 
 Arguments:
-  INPUT              Input file (.gs2 or .txt) or directory
-  OUTPUT             Output file (.gs2bc)
+  INPUT              Input file (.gs2, .txt, or .gs2bc) or directory
+  OUTPUT             Output file (.gs2bc for compile, .gs2 for decompile)
 
 Options:
   -o, --output FILE  Specify output file
+  -d, --decompile    Decompile .gs2bc to .gs2 source
   -v, --verbose      Verbose output
   -h, --help         Show this help message
 
 Examples:
-  %s script.gs2                    # Creates script.gs2bc
+  %s script.gs2                    # Creates script.gs2bc (compile)
+  %s script.gs2bc -d               # Creates script.gs2 (decompile)
   %s script.gs2 output.gs2bc       # Creates output.gs2bc
-  %s script.gs2 -o output.gs2bc    # Creates output.gs2bc
+  %s script.gs2bc -o output.gs2 -d # Creates output.gs2 (decompile)
   %s scripts/                      # Process directory
   %s file1.gs2 file2.gs2 file3.gs2 # Process multiple files (drag & drop)
 )";
@@ -99,6 +103,10 @@ Arguments parseArguments(int argc, const char* argv[])
 		{
 			args.verbose = true;
 		}
+		else if (arg == "--decompile" || arg == "-d")
+		{
+			args.decompile_mode = true;
+		}
 		else if (arg == "--output" || arg == "-o")
 		{
 			if (++i >= arg_span.size())
@@ -143,7 +151,7 @@ Arguments parseArguments(int argc, const char* argv[])
 				return args;
 			}
 		}
-		else if (args.output_path.empty())
+		else if (args.output_path.empty() && !args.decompile_mode)
 		{
 			args.output_path = input_path;
 			args.output_path.replace_extension(".gs2bc");
@@ -208,6 +216,72 @@ Response compileFile(const std::filesystem::path& filePath, const std::filesyste
 	return result;
 }
 
+struct DecompileResult
+{
+	std::string source;
+	std::filesystem::path output_file;
+	std::string errmsg;
+};
+
+DecompileResult decompileFile(const std::filesystem::path& filePath, const std::filesystem::path& outputPath = {})
+{
+	DecompileResult result{};
+	gs2decompiler::GS2Decompiler decompiler;
+
+	if (!decompiler.loadBytecode(filePath.string()))
+	{
+		result.errmsg = decompiler.getError();
+		return result;
+	}
+
+	result.source = decompiler.decompile();
+
+	// Determine output path
+	if (outputPath.empty())
+		result.output_file = filePath.parent_path() / (filePath.stem().string() + ".gs2");
+	else
+		result.output_file = outputPath;
+
+	// Write source
+	std::ofstream outstream(result.output_file);
+	outstream << result.source;
+
+	return result;
+}
+
+bool decompileAndReport(const std::filesystem::path& inputPath, const std::filesystem::path& outputPath = {}, bool verbose = false)
+{
+	if (!std::filesystem::exists(inputPath))
+	{
+		printf(" -> [ERROR] File does not exist\n");
+		return false;
+	}
+
+	if (verbose)
+		printf("Decompiling file %s\n", inputPath.c_str());
+
+	auto start = std::chrono::high_resolution_clock::now();
+	auto result = decompileFile(inputPath, outputPath);
+	auto finish = std::chrono::high_resolution_clock::now();
+
+	if (verbose)
+	{
+		std::chrono::duration<double> diff = finish - start;
+		printf("Decompiled in %f seconds\n", diff.count());
+	}
+
+	if (!result.errmsg.empty())
+	{
+		printf(" -> [ERROR] %s\n", result.errmsg.c_str());
+		return false;
+	}
+
+	if (verbose)
+		printf(" -> saved to %s\n", result.output_file.c_str());
+
+	return true;
+}
+
 bool compileAndReport(const std::filesystem::path& inputPath, const std::filesystem::path& outputPath = {}, bool verbose = false)
 {
 	if (!std::filesystem::exists(inputPath))
@@ -242,7 +316,7 @@ bool compileAndReport(const std::filesystem::path& inputPath, const std::filesys
 }
 
 void processFileList(const std::vector<std::filesystem::path>& files, bool verbose, std::string_view mode_name = "",
-	const std::filesystem::path& single_output = {})
+	const std::filesystem::path& single_output = {}, bool decompile_mode = false)
 {
 	int processed = 0;
 	int errors = 0;
@@ -256,12 +330,23 @@ void processFileList(const std::vector<std::filesystem::path>& files, bool verbo
 			printf("Processing: %s\n", file_path.filename().c_str());
 
 		auto output = files.size() == 1 && !single_output.empty() ? single_output : std::filesystem::path{};
-		bool success = compileAndReport(file_path, output, verbose);
+		bool success;
+
+		if (decompile_mode)
+			success = decompileAndReport(file_path, output, verbose);
+		else
+			success = compileAndReport(file_path, output, verbose);
 
 		if (files.size() == 1 && !verbose && success)
 		{
-			auto final_output = output.empty() ? file_path.parent_path() / file_path.stem().concat(".gs2bc") : output;
-			printf("Compilation successful\n -> saved to %s\n", final_output.c_str());
+			auto final_output = output.empty() ?
+				(decompile_mode ?
+					file_path.parent_path() / (file_path.stem().string() + ".gs2") :
+					file_path.parent_path() / (file_path.stem().string() + ".gs2bc"))
+				: output;
+			printf("%s successful\n -> saved to %s\n",
+				decompile_mode ? "Decompilation" : "Compilation",
+				final_output.c_str());
 		}
 
 		success ? processed++ : errors++;
@@ -271,7 +356,7 @@ void processFileList(const std::vector<std::filesystem::path>& files, bool verbo
 		printf("\n%s processing complete: %d files processed, %d errors\n", mode_name.data(), processed, errors);
 }
 
-std::vector<std::filesystem::path> gatherFilesFromDirectory(const std::filesystem::path& dir_path, bool verbose)
+std::vector<std::filesystem::path> gatherFilesFromDirectory(const std::filesystem::path& dir_path, bool verbose, bool decompile_mode)
 {
 	std::vector<std::filesystem::path> files;
 
@@ -280,16 +365,26 @@ std::vector<std::filesystem::path> gatherFilesFromDirectory(const std::filesyste
 		const auto& path = entry.path();
 		auto ext = path.extension();
 
-		if (ext == ".gs2" || ext == ".txt")
-			files.push_back(path);
-		else if (verbose)
-			printf("Skipping file %s\n", path.c_str());
+		if (decompile_mode)
+		{
+			if (ext == ".gs2bc")
+				files.push_back(path);
+			else if (verbose)
+				printf("Skipping file %s\n", path.c_str());
+		}
+		else
+		{
+			if (ext == ".gs2" || ext == ".txt")
+				files.push_back(path);
+			else if (verbose)
+				printf("Skipping file %s\n", path.c_str());
+		}
 	}
 
 	return files;
 }
 
-int processDirectory(const std::filesystem::path& input_path, bool verbose)
+int processDirectory(const std::filesystem::path& input_path, bool verbose, bool decompile_mode)
 {
 	if (!std::filesystem::exists(input_path) || !std::filesystem::is_directory(input_path))
 	{
@@ -300,7 +395,7 @@ int processDirectory(const std::filesystem::path& input_path, bool verbose)
 	if (verbose)
 		printf("Scanning directory: %s\n", input_path.c_str());
 
-	processFileList(gatherFilesFromDirectory(input_path, verbose), verbose, "Directory");
+	processFileList(gatherFilesFromDirectory(input_path, verbose, decompile_mode), verbose, "Directory", {}, decompile_mode);
 	return 0;
 }
 
@@ -327,15 +422,15 @@ int main(int argc, const char* argv[])
 
 	int result;
 	if (args.directory_mode)
-		result = processDirectory(args.input_paths[0], args.verbose);
+		result = processDirectory(args.input_paths[0], args.verbose, args.decompile_mode);
 	else if (args.multi_file_mode)
 	{
-		processFileList(args.input_paths, args.verbose, "Multi-file");
+		processFileList(args.input_paths, args.verbose, "Multi-file", {}, args.decompile_mode);
 		result = 0;
 	}
 	else
 	{
-		processFileList(args.input_paths, args.verbose, "", args.output_path);
+		processFileList(args.input_paths, args.verbose, "", args.output_path, args.decompile_mode);
 		result = 0;
 	}
 
