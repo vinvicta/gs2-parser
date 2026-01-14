@@ -1,0 +1,232 @@
+name: Build Release Binaries
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-linux-x64:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++ bison flex
+
+      - name: Build
+        run: |
+          mkdir build
+          cd build
+          cmake -DCMAKE_BUILD_TYPE=Release ..
+          make -j$(nproc)
+
+      - name: Create package
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          mkdir -p gs2parser-${VERSION}-linux-x86_64
+          cp build/bin/gs2test gs2parser-${VERSION}-linux-x86_64/
+          strip gs2parser-${VERSION}-linux-x86_64/gs2test
+          cat > gs2parser-${VERSION}-linux-x86_64/README.txt << 'EOF'
+      GS2 Script Compiler/Disassembler
+      =================================
+      Compile GS2 source to bytecode:
+        ./gs2test script.gs2
+      Disassemble bytecode to readable format:
+        ./gs2test script.gs2bc -d
+      Documentation: https://github.com/vinvicta/gs2-parser
+      License: MIT
+      EOF
+          tar -czf gs2parser-${VERSION}-linux-x86_64.tar.gz gs2parser-${VERSION}-linux-x86_64/
+          sha256sum gs2parser-${VERSION}-linux-x86_64.tar.gz > gs2parser-${VERSION}-linux-x86_64.tar.gz.sha256
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-x86_64
+          path: gs2parser-*-linux-x86_64.tar.gz*
+
+  build-macos-x64:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          if ! command -v cmake &> /dev/null; then
+            brew install cmake
+          fi
+          if ! command -v bison &> /dev/null; then
+            brew install bison
+          fi
+          if ! command -v flex &> /dev/null; then
+            brew install flex
+          fi
+
+      - name: Build
+        run: |
+          mkdir build
+          cd build
+          cmake -DCMAKE_BUILD_TYPE=Release ..
+          make -j$(sysctl -n hw.ncpu)
+
+      - name: Create package
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          ARCH=$(uname -m)
+          mkdir -p gs2parser-${VERSION}-macos-${ARCH}
+          cp build/bin/gs2test gs2parser-${VERSION}-macos-${ARCH}/
+          strip gs2parser-${VERSION}-macos-${ARCH}/gs2test
+          cat > gs2parser-${VERSION}-macos-${ARCH}/README.txt << EOF
+      GS2 Script Compiler/Disassembler for macOS (${ARCH})
+      ===================================================
+      Compile GS2 source to bytecode:
+        ./gs2test script.gs2
+      Disassemble bytecode to readable format:
+        ./gs2test script.gs2bc -d
+      Documentation: https://github.com/vinvicta/gs2-parser
+      License: MIT
+      EOF
+          tar -czf gs2parser-${VERSION}-macos-${ARCH}.tar.gz gs2parser-${VERSION}-macos-${ARCH}/
+          shasum -a 256 gs2parser-${VERSION}-macos-${ARCH}.tar.gz > gs2parser-${VERSION}-macos-${ARCH}.tar.gz.sha256
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ runner.arch }}
+          path: gs2parser-*-macos-*.tar.gz*
+
+  build-macos-arm64:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          if ! command -v cmake &> /dev/null; then
+            brew install cmake
+          fi
+          if ! command -v bison &> /dev/null; then
+            brew install bison
+          fi
+          if ! command -v flex &> /dev/null; then
+            brew install flex
+          fi
+
+      - name: Build for ARM64
+        run: |
+          mkdir build
+          cd build
+          cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64 ..
+          make -j$(sysctl -n hw.ncpu)
+
+      - name: Create package
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          mkdir -p gs2parser-${VERSION}-macos-arm64
+          cp build/bin/gs2test gs2parser-${VERSION}-macos-arm64/
+          strip gs2parser-${VERSION}-macos-arm64/gs2test
+          cat > gs2parser-${VERSION}-macos-arm64/README.txt << 'EOF'
+      GS2 Script Compiler/Disassembler for macOS (Apple Silicon)
+      ===========================================================
+      Compile GS2 source to bytecode:
+        ./gs2test script.gs2
+      Disassemble bytecode to readable format:
+        ./gs2test script.gs2bc -d
+      Documentation: https://github.com/vinvicta/gs2-parser
+      License: MIT
+      EOF
+          tar -czf gs2parser-${VERSION}-macos-arm64.tar.gz gs2parser-${VERSION}-macos-arm64/
+          shasum -a 256 gs2parser-${VERSION}-macos-arm64.tar.gz > gs2parser-${VERSION}-macos-arm64.tar.gz.sha256
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-arm64
+          path: gs2parser-*-macos-arm64.tar.gz*
+
+  build-windows-x64:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup vcpkg
+        run: |
+          git clone https://github.com/Microsoft/vcpkg.git
+          ./vcpkg/bootstrap-vcpkg.bat
+
+      - name: Install dependencies
+        run: |
+          ./vcpkg/vcpkg install cmake bison flex --triplet x64-windows
+
+      - name: Setup CMake
+        uses: jwlawson/actions-setup-cmake@v2
+        with:
+          cmake-package: vcpkg
+
+      - name: Build
+        run: |
+          mkdir build
+          cd build
+          cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake ..
+          cmake --build . --config Release --parallel
+
+      - name: Create package
+        shell: pwsh
+        run: |
+          $VERSION = "${{ github.ref }}" -replace "refs/tags/v", ""
+          mkdir "gs2parser-$VERSION-windows-x64"
+          Copy-Item build\Release\gs2test.exe "gs2parser-$VERSION-windows-x64\"
+          @"
+      GS2 Script Compiler/Disassembler for Windows
+      ==============================================
+      Compile GS2 source to bytecode:
+        gs2test.exe script.gs2
+      Disassemble bytecode to readable format:
+        gs2test.exe script.gs2bc -d
+      Documentation: https://github.com/vinvicta/gs2-parser
+      License: MIT
+      "@ | Out-File -Encoding ASCII "gs2parser-$VERSION-windows-x64\README.txt"
+          Compress-Archive -Path "gs2parser-$VERSION-windows-x64" -DestinationPath "gs2parser-$VERSION-windows-x64.zip"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64
+          path: gs2parser-*-windows-x64.zip
+
+  release:
+    needs: [build-linux-x64, build-macos-x64, build-macos-arm64, build-windows-x64]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Create release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            linux-x86_64/*.tar.gz*
+            macos-*/build-macos-x64/*.tar.gz*
+            macos-arm64/*.tar.gz*
+            windows-x64/*.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
